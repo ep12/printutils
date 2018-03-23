@@ -14,7 +14,10 @@ import sys
 from inspect import currentframe, getmro, isclass, isfunction
 import regex
 
-
+returnFormatted = False
+outf = print
+eeregex = '(?P<todo>((^|[^\\\\])(\$|!)([^() ]+|(?<rec>\((?:[^()]++|(?&rec))*\))))|(^|[^\\\\])({.+}))'
+outopt = {'end': ''}
 allowExec = False
 warnOnDenial = True
 returnOnDenial = False
@@ -26,30 +29,56 @@ def printf(fmt: str, *args, **kwargs) -> str:
 	'''
 	assert isinstance(fmt, str), 'fmt must be a string.'
 	frame = kwargs.pop('_frame_', currentframe().f_back)
-	d = {}
+	dl = locals()
+	dg = globals()
 	if kwargs:
-		d.update(**kwargs)
+		dl.update(**kwargs)
 	if frame.f_locals:
-		d.update(**frame.f_locals)
+		dl.update(**frame.f_locals)
 	if frame.f_globals:
-		d.update(**frame.f_globals)
-	tmp = fmt.format(fmt, *args, **d)
-	matches = [x[0] for x in regex.findall('((\$|\!)(?<rec>\((?:[^()]++|(?&rec))*\)))', tmp, flags=regex.VERBOSE)]
+		dg.update(**frame.f_globals)
+	# print(dl, dg)  # DEBUG
+	d = dg.copy()
+	d.update(dl)
+	tmp = fmt
+	matches = [x[0] for x in regex.findall(eeregex, tmp, flags=regex.VERBOSE + regex.MULTILINE)]
+	# TODO: {eval} and $eval and !exec
 	for m in matches:
-		if m[0] is '!':
+		if not (m.startswith('$') or m.startswith('!') or m.startswith('{')):
+			m2 = m[1:]
+		else:
+			m2 = m
+		# print(repr(m), repr(m2))  # DEBUG
+		if m2.startswith('!'):
+			# print('exec(%r)' % m2)  # DEBUG
 			if allowExec:
-				exec(m[2:-1])
+				if m2.startswith('!(') and m2.endswith(')'):
+					m3 = m2[2:-1]
+				else:
+					m3 = m2[1:]
+				exec(m3, dg, dl)
 				r = ''
 			else:
 				if returnOnDenial:
 					return False
 				r = '[EXECUTION DENIED]' * warnOnDenial
+		elif m2.startswith('$'):
+			if m.startswith('$(') and m.endswith(')'):
+				m3 = m2[2:-1]
+			else:
+				m3 = m2[1:]
+			# print('eval(%r)' % m3)  # DEBUG
+			r = str(eval(m3, dg, dl))
+		elif m2.startswith('{') and m2.endswith('}'):  # BUG: Will not work on {0!r: <7} etc.
+			# print('eval(%r)' % m2[1:-1]) # DEBUG
+			r = str(eval(m2[1:-1], dg, dl))
 		else:
-			r = str(eval(m[2:-1]))
-		tmp = tmp.replace(m, r)
+			r = ''
+		tmp = tmp.replace(m2, r)
 	tmp = tmp.format(fmt, *args, **d)
-	print(tmp, end='')
-	return tmp
+	outf(tmp, **outopt)
+	if returnFormatted:
+		return tmp
 
 
 # Feature requests welcome.
