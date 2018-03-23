@@ -1,6 +1,7 @@
 *test.py
 *notes.*
 .pypirc
+install.*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

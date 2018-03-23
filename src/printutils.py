@@ -12,21 +12,22 @@ __version__ = '1.0.1'
 __description__ = 'Various print utils for python3'
 __keywords__ = 'utils development print output'
 
-import sys
 from inspect import currentframe, getmro, isclass, isfunction
-import regex
+import regex as _regex
+
 
 returnFormatted = False
+warnOnError = True
 outf = print
-eeregex = '(?P<todo>' \
-	+ '((^|[^\\\\])(\$|!)((\w+[\w\d=-]*)|(?<rec>\((?:[^()]++|(?&rec))*\))))' \
-	+ '|(^|[^\\\\])({[^}]+}))'
 outopt = {'end': ''}
 allowExec = False
 warnOnDenial = True
 returnOnDenial = False
-warnOnError = True
 
+
+eeregex = '(?P<todo>' \
+	+ '((^|[^\\\\])(\$|!)((\w+[\w\d=-]*)|(?<rec>\((?:[^()]++|(?&rec))*\))))' \
+	+ '|(^|[^\\\\])({[^}]+}))'
 _fmtspec = '((?P<fill>.?)(?P<align>[0<>\\^]))?' \
 	+ '(?P<sign>[ +-])?' \
 	+ '(?P<altform>[#])?' \
@@ -57,7 +58,7 @@ def printf(fmt: str, *args, **kwargs) -> str:
 	d = dg.copy()
 	d.update(dl)
 	tmp = fmt
-	matches = [x[0] for x in regex.findall(eeregex, tmp, flags=regex.VERBOSE + regex.MULTILINE)]
+	matches = [x[0] for x in _regex.findall(eeregex, tmp, flags=_regex.VERBOSE + _regex.MULTILINE)]
 	# print('TODO matches:\n%s' % matches)  # DEBUG
 	for m in matches:
 		if m.startswith('\\'):
@@ -104,7 +105,10 @@ def printf(fmt: str, *args, **kwargs) -> str:
 		tmp = tmp.replace(m, m[0] * (m2 != m) + r)
 	# tmp = tmp.format(fmt, *args, **d)
 	tmp = tmp.replace('\$', '$').replace('\!', '!').replace('\{', '{')
-	outf(tmp, **outopt)
+	if outopt is None:
+		outf(tmp)
+	else:
+		outf(tmp, **outopt)
 	if returnFormatted:
 		return tmp
 
