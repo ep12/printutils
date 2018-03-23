@@ -9,6 +9,8 @@ __license__ = 'MIT'
 __title__ = 'printutils'
 __url__ = 'https://github.com/ep12/printutils'
 __version__ = '1.0.1'
+__description__ = 'Various print utils for python3'
+__keywords__ = 'utils development print output'
 
 import sys
 from inspect import currentframe, getmro, isclass, isfunction

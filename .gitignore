@@ -1,5 +1,7 @@
-test.py
-notes.*
+*test.py
+*notes.*
+.pypirc
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
