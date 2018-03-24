@@ -36,10 +36,15 @@ import sys as _sys
 import platform as _platform
 import time as _time
 
+
 if _platform.system() is 'Windows':
 	import msvcrt as _get
 else:
-	import getch as _get
+	try:
+		import getch as _get
+	except ImportError:
+		print('\nMake sure that you have getch installed: pip3 install -U getch.')
+		system(1)
 
 
 def _fdconv(fd):
@@ -72,23 +77,28 @@ warnOnFail = True
 
 useColors = {'stdout': False, 'stderr': False, 'all': False, 'any': False, 'format': False}
 
-for fd in [_sys.stdout, _sys.stderr]:
-	if (hasattr(fd, 'isatty') and fd.isatty()) or ('TERM' in _os.environ and _os.environ['TERM'] is 'ANSI'):
-		if _platform.system() is 'Windows':
-			if 'CONEMUANSI' in _os.environ and _os.environ['CONEMUANSI'] == 'ON':
-				useColors[_fdconv(fd)] = True
-			elif 'TERM' in _os.environ and _os.environ['TERM'] == 'ANSI':
-				useColors[_fdconv(fd)] = True
-			else:
-				useColors[_fdconv(fd)] = False
-		else:
-			useColors[_fdconv(fd)] = True
-	else:
-		useColors[_fdconv(fd)] = False
 
-useColors['all'] = useColors['stdout'] and useColors['stderr']
-useColors['any'] = useColors['stdout'] or useColors['stderr']
-useColors['format'] = useColors['all']
+def initColors():
+	for fd in [_sys.stdout, _sys.stderr]:
+		if (hasattr(fd, 'isatty') and fd.isatty()) or ('TERM' in _os.environ and _os.environ['TERM'] is 'ANSI'):
+			if _platform.system() is 'Windows':
+				if 'CONEMUANSI' in _os.environ and _os.environ['CONEMUANSI'] == 'ON':
+					useColors[_fdconv(fd)] = True
+				elif 'TERM' in _os.environ and _os.environ['TERM'] == 'ANSI':
+					useColors[_fdconv(fd)] = True
+				else:
+					useColors[_fdconv(fd)] = False
+			else:
+				useColors[_fdconv(fd)] = True
+		else:
+			useColors[_fdconv(fd)] = False
+
+	useColors['all'] = useColors['stdout'] and useColors['stderr']
+	useColors['any'] = useColors['stdout'] or useColors['stderr']
+	useColors['format'] = useColors['all']
+
+
+initColors()
 
 
 def colorSettings():
@@ -242,18 +252,25 @@ def _extracolor(i):  # TODO
 	return ''
 
 
+def ANSI(opt: str, dest=None):
+	assert isinstance(opt, str)
+	# TODO: FULL ANSI SUPPORT inside []
+	return SGR(opt, dest)
+
+
 def SGR(opt: str, dest=None):
 	assert isinstance(opt, str)
 	if dest is not None and useColors.get(dest, False):
 		tmp = []
+		fail = []
 		for x in opt.split(';'):
 			if x in _sgr:
 				tmp.append(str(_sgr[x]))
 			elif _extracolor(x):
 				tmp.append(_extracolor(x))
-		if len(tmp) - len(opt.split(';')) > -2:
-			return _ansi['SGR'] % ';'.join(tmp)
-		return '[%s]' % opt
+			else:
+				fail.append(x)
+		return _ansi['SGR'] % ';'.join(tmp) + ('<FAILED: %s>' % ';'.join(fail)) * (len(fail) > 0)
 	else:
 		return ''
 
@@ -261,7 +278,7 @@ def SGR(opt: str, dest=None):
 _eeregex = '(?P<todo>' \
 	+ '((^|[^\\\\])(\$|!)((\w+[\w\d=-]*)|(?<rec>\((?:[^()]++|(?&rec))*\))))' \
 	+ '|(^|[^\\\\])({[^}]+})' \
-	+ '|(^|[^\\\\])(\[[\w;]+\])' \
+	+ '|(^|[^\\\\])(\[[-;\w\d\s]+\])' \
 	+ ')'
 _fmtspec = '((?P<fill>.?)(?P<align>[0<>\\^]))?' \
 	+ '(?P<sign>[ +-])?' \
@@ -363,7 +380,7 @@ def _format(fmt: str, dest: str, *args, **kwargs):  # TODO:
 		elif m2.startswith('[') and m2.endswith(']'):
 			m3 = m2[1:-1]
 			try:
-				r = SGR(m3, dest)
+				r = ANSI(m3, dest)
 			except Exception as e:
 				r = ('[FAILED: %r]' % m3) * warnOnFail
 				errs.append([e, {'m': m, 'm2': m2, 'm3': m3, 'ret': ret}])
@@ -411,15 +428,18 @@ def printf(fmt: str, dest: str, *args, **kwargs):
 			return e
 
 
-def _out_printf(fmt: str, *args, **kwargs):
+def oprintf(fmt: str, *args, **kwargs):
 	printf(fmt, 'stdout', *args, **kwargs)
 
 
-def _err_printf(fmt: str, *args, **kwargs):
+def eprintf(fmt: str, *args, **kwargs):
 	printf(fmt, 'stderr', *args, **kwargs)
 
 
 def hook(sysobj):
-	assert sysobj is _sys
-	sysobj.stdout.__dict__.update([('printf', _out_printf)])
-	sysobj.stderr.__dict__.update([('printf', _err_printf)])
+	'''hook(sysobj)
+	adds the printf function to sysobj.stdout and sysobj.stderr
+	'''
+	assert sysobj is _sys, 'sysobj must me the sys module.'
+	sysobj.stdout.__dict__.update([('printf', oprintf)])
+	sysobj.stderr.__dict__.update([('printf', eprintf)])
