@@ -92,7 +92,7 @@ def printf(fmt: str, *args, **kwargs) -> str:
 		elif m2.startswith('{') and m2.endswith('}'):  # BUG: Will not work on {0!r: <7} etc.
 			# print('eval(%r)' % m2[1:-1]) # DEBUG
 			m3 = m2[1:-1]
-			if bool(regex.fullmatch(_fmtregex, m3)):
+			if bool(_regex.fullmatch(_fmtregex, m3)):
 				try:
 					r = ('{%s}' % m3).format(*args, **d)
 				except IndexError:
