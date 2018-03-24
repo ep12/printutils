@@ -29,7 +29,7 @@ setup(
 	license=__license__,
 	keywords=__keywords__,
 	url=__url__,
-	packages=['printutils', 'regex'],
+	packages=['printutils', 'regex', 'getch'],
 	long_description=read('PKG_DESC'),
 	classifiers=[
 		'Development Status :: 4 - Beta',
