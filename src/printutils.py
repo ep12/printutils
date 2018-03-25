@@ -25,7 +25,7 @@ __email__ = ''
 __license__ = 'MIT'
 __title__ = 'printutils'
 __url__ = 'https://github.com/ep12/printutils'
-__version__ = '1.0.2'
+__version__ = '1.0.3'
 __description__ = 'Various print utils for python3'
 __keywords__ = 'utils development print output'
 
@@ -36,18 +36,21 @@ import sys as _sys
 import platform as _platform
 import time as _time
 
-
-if _platform.system() is 'Windows':
-	import msvcrt as _get
-else:
-	try:
-		import getch as _get
-	except ImportError:
-		print('\nMake sure that you have getch installed: pip3 install -U getch.')
-		system(1)
+_get = None
 
 
-def _fdconv(fd):
+def _fdconv(fd, target=None):
+	if target is not None and isinstance(target, str):
+		if target.lower() in ['string', 's']:
+			if not isinstance(fd, str):
+				return _fdconv(fd)
+			else:
+				return fd
+		else:
+			if isinstance(fd, str):
+				return _fdconv(fd)
+			else:
+				return fd
 	if isinstance(fd, str):
 		if 'stdin' in fd.lower():
 			return _sys.stdin
@@ -67,8 +70,6 @@ def _fdconv(fd):
 		raise ValueError('fd must be a string or a file descriptor!')
 
 
-_g = globals()['__builtins__']
-# retfmt = [None, '(fmt, ret, errs)']['display' not in globals()['__builtins__']]
 _retfmt_dbg = '(fmt, dest, matches, errs, ret)'
 retfmt = [None, _retfmt_dbg][hasattr(_sys.stdout, 'isatty') and _sys.stdout.isatty() is False]
 outopt = {'end': ''}
@@ -79,6 +80,9 @@ useColors = {'stdout': False, 'stderr': False, 'all': False, 'any': False, 'form
 
 
 def initColors():
+	'''initColors()
+	Tests if colors are supported by the device / terminal and sets the useColors options accordingly.
+	'''
 	for fd in [_sys.stdout, _sys.stderr]:
 		if (hasattr(fd, 'isatty') and fd.isatty()) or ('TERM' in _os.environ and _os.environ['TERM'] is 'ANSI'):
 			if _platform.system() is 'Windows':
@@ -101,13 +105,10 @@ def initColors():
 initColors()
 
 
-def getGlobals():
-	return globals()
-
-
 def colorSettings():
+	'Displays the current color settings'
 	for x in useColors:
-		printf('{x: >6}: Colors are $(["dis", "en"][useColors[x]])abled.\n', 'stdout', x=x)
+		oprintf('{x: >8}: Colors are $(["dis", "en"][useColors[x]])abled.\n', x=x)
 
 
 def forceColors():
@@ -210,6 +211,15 @@ _sgr = {
 
 
 def _getCursor():
+	if _get is None:
+		if _platform.system() is 'Windows':
+			_get = __import__('msvcrt')
+		else:
+			try:
+				_get = __import__('getch')
+			except ImportError:
+				print('Getch is required to read the cursor position.\nMake sure that you have it installed: pip3 install -U getch.')
+				system(1)
 	_sys.stdout.buffer.write(_ansi['DSR'].encode())
 	_sys.stdout.buffer.flush()
 	appendmode = False
@@ -400,25 +410,6 @@ def _format(fmt: str, dest: str, frame, *args, **kwargs):  # TODO:
 
 
 def _printf(fmt: str, dest: str, frame, *args, **kwargs):
-	'''_printf(fmt: str, dest: str, *args, **kwargs)
-		- fmt: str
-			A string to format
-		- dest: str
-			Whether to write to 'stdout' or 'stderr'.
-			If invalid, it won't be printed
-		? *args
-			Arguments to pass to the format function
-		? **kwargs
-			A dict with values to pass to the format function
-
-		returns:
-			eval(retfmt) if retfmt is not None.
-			default for retfmt: '(fmt, ret, errs)' if not using ipython
-			fmt: the input string.
-			ret: the output string.
-			errs: a list of errors and the state of the variables at this time.
-			matches: a list of everything that is tried to be replaced.
-	'''
 	if dest in ['stdout', _sys.stdout]:
 		outf = _sys.stdout.write
 	elif dest in ['stderr', _sys.stderr]:
@@ -427,6 +418,8 @@ def _printf(fmt: str, dest: str, frame, *args, **kwargs):
 		outf = (lambda x: x)  # adding brackets bypasses flake E371 LOL
 	fmt, dest, matches, errs, ret = _format(fmt, dest, frame, *args, **kwargs)
 	outf(ret)
+	if outopt.get('end'):
+		outf(outopt['end'])
 	if retfmt is not None:
 		try:
 			return eval(retfmt)
@@ -435,11 +428,29 @@ def _printf(fmt: str, dest: str, frame, *args, **kwargs):
 
 
 def oprintf(fmt: str, *args, **kwargs):
+	'''oprintf(fmt: str, *args, **kwargs)
+		Prints a formatted string to stdout.
+		- fmt: str
+			A string to format
+		? *args
+			Arguments to pass to the format function
+		? **kwargs
+			A dict with values to pass to the format function
+	'''
 	frame = kwargs.pop('_frame_', currentframe().f_back)
 	_printf(fmt, 'stdout', frame, *args, **kwargs)
 
 
 def eprintf(fmt: str, *args, **kwargs):
+	'''eprintf(fmt: str, *args, **kwargs)
+		Prints a formatted string to stderr.
+		- fmt: str
+			A string to format
+		? *args
+			Arguments to pass to the format function
+		? **kwargs
+			A dict with values to pass to the format function
+	'''
 	frame = kwargs.pop('_frame_', currentframe().f_back)
 	_printf(fmt, 'stderr', frame, *args, **kwargs)
 
