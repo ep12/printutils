@@ -101,6 +101,10 @@ def initColors():
 initColors()
 
 
+def getGlobals():
+	return globals()
+
+
 def colorSettings():
 	for x in useColors:
 		printf('{x: >6}: Colors are $(["dis", "en"][useColors[x]])abled.\n', 'stdout', x=x)
@@ -304,13 +308,15 @@ def format(fmt: str, *args, **kwargs) -> str:
 		returns:
 			The formatted output string.
 	'''
-	return _format(fmt, 'format', *args, **kwargs)[4]
+	frame = kwargs.pop('_frame_', currentframe().f_back)
+	return _format(fmt, 'format', frame, *args, **kwargs)[4]
 
 
-def _format(fmt: str, dest: str, *args, **kwargs):  # TODO:
+def _format(fmt: str, dest: str, frame, *args, **kwargs):  # TODO:
 	# TODO: update for to while for nested formatting...
 	assert isinstance(fmt, str), 'fmt must be a string.'
-	frame = kwargs.pop('_frame_', currentframe().f_back)
+	# frame = kwargs.pop('_frame_', currentframe().f_back)  # TODO: move to top-level fns:
+	# format, printf, oprintf, eprintf
 	dl = locals()
 	dg = globals()
 	if kwargs:
@@ -393,8 +399,8 @@ def _format(fmt: str, dest: str, *args, **kwargs):  # TODO:
 	return (fmt, dest, matches, errs, ret)
 
 
-def printf(fmt: str, dest: str, *args, **kwargs):
-	'''printf(fmt: str, dest: str, *args, **kwargs)
+def _printf(fmt: str, dest: str, frame, *args, **kwargs):
+	'''_printf(fmt: str, dest: str, *args, **kwargs)
 		- fmt: str
 			A string to format
 		- dest: str
@@ -419,7 +425,7 @@ def printf(fmt: str, dest: str, *args, **kwargs):
 		outf = _sys.stderr.write
 	else:
 		outf = (lambda x: x)  # adding brackets bypasses flake E371 LOL
-	fmt, dest, matches, errs, ret = _format(fmt, dest, *args, **kwargs)
+	fmt, dest, matches, errs, ret = _format(fmt, dest, frame, *args, **kwargs)
 	outf(ret)
 	if retfmt is not None:
 		try:
@@ -429,11 +435,13 @@ def printf(fmt: str, dest: str, *args, **kwargs):
 
 
 def oprintf(fmt: str, *args, **kwargs):
-	printf(fmt, 'stdout', *args, **kwargs)
+	frame = kwargs.pop('_frame_', currentframe().f_back)
+	_printf(fmt, 'stdout', frame, *args, **kwargs)
 
 
 def eprintf(fmt: str, *args, **kwargs):
-	printf(fmt, 'stderr', *args, **kwargs)
+	frame = kwargs.pop('_frame_', currentframe().f_back)
+	_printf(fmt, 'stderr', frame, *args, **kwargs)
 
 
 def hook(sysobj):
