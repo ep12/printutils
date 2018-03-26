@@ -97,6 +97,7 @@ _fmtregex = '(?P<fieldname>[\d\w]+)' \
 
 
 def _getInit():
+	global _get
 	if _get is None:
 		if _platform.system() is 'Windows':
 			_get = __import__('msvcrt')
@@ -283,6 +284,7 @@ _sgr = {
 
 
 def _getCursor():
+	_get
 	_getInit()
 	_sys.stdout.buffer.write(_ansi['DSR'].encode())
 	_sys.stdout.buffer.flush()
@@ -318,27 +320,45 @@ def CUP(row=None, col=None):
 
 def _OSC_available(n: int=0) -> bool:
 	assert isinstance(n, int) and n >= 0 and n < 256
+	global _get
 	if _sys.platform in ['darwin', 'linux']:
 		if not _os.path.exists('/dev/tty'):
 			return (False, None)
-		_sys.stdout.write('\x1b[8m\x1b]4;%d;?\a\x1b[28m' % n)
-		with open('/dev/tty', 'rb') as f:
-			# _os.lockf(f, _os.F_LOCK)
-			tmp = b''
-			s = _time.time()
-			while _time.time() < s + 0.01:
-				if _os.path.getsize('/dev/tty'):
-					x = f.read(1)
-					if x is '\a':
-						f.close()
-						open('/dev/tty', 'w').close()
-						break
-					tmp += x
-			# _os.lockf(f, _os.F_ULOCK, 16)
-		if tmp is not b'':
-			print()
+		_getInit()
+		s = _time.time()
+		appendmode = True
+		tmp = ''
+		_sys.stdout.buffer.write(('\x1b[8m\x1b]4;%d;?\a\x1b[28m' % n).encode())
+		_sys.stdout.buffer.flush()
+		while True:  # time.time() < s + 0.01:
+			x = _get.getch()
+			if x is '\x1b':
+				tmp = x
+				appendmode = True
+			elif appendmode:
+				tmp += x
+			if x in ['\a', '\n']:
+				break
+		if tmp is not '':
 			print(repr(tmp))
 			return (True, tmp)
+		# with open('/dev/tty', 'rb') as f:
+		# 	# _os.lockf(f, _os.F_LOCK)
+		# 	tmp = b''
+		#
+		# 	while _time.time() < s + 0.01:
+		# 		if _os.path.getsize('/dev/tty'):
+		# 			x = f.read(1)
+		# 			if x is '\a':
+		# 				f.close()
+		# 				open('/dev/tty', 'w').close()
+		# 				break
+		# 			tmp += x
+		# 	# _os.lockf(f, _os.F_ULOCK, 16)
+		# if tmp is not b'':
+		# 	print()
+		# 	print(repr(tmp))
+		# 	return (True, tmp)
 	return (False, None)
 
 
