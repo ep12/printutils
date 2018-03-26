@@ -320,10 +320,10 @@ def _OSC_available(n: int=0) -> bool:
 	assert isinstance(n, int) and n >= 0 and n < 256
 	if _sys.platform in ['darwin', 'linux']:
 		if not _os.path.exists('/dev/tty'):
-			return False
-		oprintf('\x1b\[8m\e]4;%d;?\a\x1b[28m' % n)
+			return (False, None)
+		_sys.stdout.write('\x1b[8m\x1b]4;%d;?\a\x1b[28m' % n)
 		with open('/dev/tty', 'rb') as f:
-			_os.lockf(f, _os.LOCK)
+			# _os.lockf(f, _os.F_LOCK)
 			tmp = b''
 			s = _time.time()
 			while _time.time() < s + 0.01:
@@ -334,24 +334,27 @@ def _OSC_available(n: int=0) -> bool:
 						open('/dev/tty', 'w').close()
 						break
 					tmp += x
-			_os.lockf(f, _os.ULOCK)
+			# _os.lockf(f, _os.F_ULOCK, 16)
 		if tmp is not b'':
-			return True
-	return False
+			print()
+			print(repr(tmp))
+			return (True, tmp)
+	return (False, None)
 
 
 def testBuiltinColors() -> int:
 	'''testBuiltinColors()
 	returns the number of supported colors or -1 if terminal does not support the detection.
 	'''
-	if not _OSC_available():
+	if not _OSC_available()[0]:
 		return -1
 	mn, mx = 0, 256
+	x = 0
 	while x + 1 < mx:
 		n = _time.time()
 		oprintf('\r' + ((int(4 * n) % 2) * ' ' + '.').ljust(3) + 3 * '\b')
 		x = (mn + mx) // 2
-		r = _OSC_available(x)
+		r = _OSC_available(x)[0]
 		if r:
 			mn = x
 		else:
