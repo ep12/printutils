@@ -319,18 +319,25 @@ def CUP(row=None, col=None):
 def _OSC_available(n: int=0) -> bool:
 	assert isinstance(n, int) and n >= 0 and n < 256
 	if _sys.platform in ['darwin', 'linux']:
-		oprintf('\e]4;%d;?\a' % n)
 		if not _os.path.exists('/dev/tty'):
 			return False
+		oprintf('\x1b\[8m\e]4;%d;?\a\x1b[28m' % n)
 		with open('/dev/tty', 'rb') as f:
+			_os.lockf(f, _os.LOCK)
 			tmp = b''
-			while True:
-				x = f.read(1)
-				if x is '\a':
-					return tmp is not b''
-				tmp += x
-	else:
-		return False
+			s = _time.time()
+			while _time.time() < s + 0.01:
+				if _os.path.getsize('/dev/tty'):
+					x = f.read(1)
+					if x is '\a':
+						f.close()
+						open('/dev/tty', 'w').close()
+						break
+					tmp += x
+			_os.lockf(f, _os.ULOCK)
+		if tmp is not b'':
+			return True
+	return False
 
 
 def testBuiltinColors() -> int:
@@ -341,12 +348,15 @@ def testBuiltinColors() -> int:
 		return -1
 	mn, mx = 0, 256
 	while x + 1 < mx:
+		n = _time.time()
+		oprintf('\r' + ((int(4 * n) % 2) * ' ' + '.').ljust(3) + 3 * '\b')
 		x = (mn + mx) // 2
 		r = _OSC_available(x)
 		if r:
 			mn = x
 		else:
 			mx = x
+	oprintf('   \r')
 	return x
 
 
