@@ -75,8 +75,37 @@ retfmt = [None, _retfmt_dbg][hasattr(_sys.stdout, 'isatty') and _sys.stdout.isat
 outopt = {'end': ''}
 allowExec = False
 warnOnFail = True
+debug = False
 
 useColors = {'stdout': False, 'stderr': False, 'all': False, 'any': False, 'format': False}
+
+_eeregex = '(?P<todo>' \
+	+ '((^|[^\\\\])(\$|!)((\w+[\w\d=-]*)|(?<rec>\((?:[^()]++|(?&rec))*\))))' \
+	+ '|(^|[^\\\\])({[^}]+})' \
+	+ '|(^|[^\\\\])(\[[^\]]+\])' \
+	+ ')'
+_fmtspec = '((?P<fill>.?)(?P<align>[0<>\\^]))?' \
+	+ '(?P<sign>[ +-])?' \
+	+ '(?P<altform>[#])?' \
+	+ '(?P<width>[\d]+)?' \
+	+ ',?(\\.(?P<precision>[\d]+))?' \
+	+ '(?P<type>[bcdeEfFgGnosxX])?'
+_fmtregex = '(?P<fieldname>[\d\w]+)' \
+	+ '(\\.(?P<attrname>\w*)|(\[(?P<elindex>[^\\]]*)\]))?' \
+	+ '(!(?P<conv>[rsa]))?' \
+	+ '(:' + _fmtspec + ')?'
+
+
+def _getInit():
+	if _get is None:
+		if _platform.system() is 'Windows':
+			_get = __import__('msvcrt')
+		else:
+			try:
+				_get = __import__('getch')
+			except ImportError:
+				print('Getch is required to read the cursor position.\nMake sure that you have it installed: pip3 install -U getch.')
+				system(1)
 
 
 def initColors():
@@ -116,21 +145,64 @@ def forceColors():
 		useColors[x] = True
 
 
+# That should be part of themedevtools
+# def colorTable():
+# 	for i in range(0, 256):
+# 		oprintf('{i: >3}: [bg=%d]   [reset]' % i)
+# 		oprintf('\n' * (i % 16 is 15))
+#
+#
+# def miniColorTable(number=False):
+# 	for i in range(0, 256):
+# 		oprintf('[bg=%d]%2x[reset]' % (i, i))
+# 		oprintf('\n' * (i % 16 is 15))
+#
+#
+# def themeColors(number=False):
+# 	for i in range(0, 32):
+# 		oprintf('[bg=%d]%2x[reset]' % (i, i))
+# 		oprintf('\n' * (i % 16 is 15))
+# 	for i in range(32, 232):
+# 		oprintf('[bg=%d]%2x[reset]' % (i, i))
+# 		oprintf('\n' * ((i - 32) % 36 is 35))
+# 	oprintf('\n')
+# 	for i in range(232, 256):
+# 		oprintf('[bg=%d]%2x[reset]' % (i, i))
+#
+#
+# def genColors():
+# 	c = [(0, 0, 0)] * 256
+# 	c[1] = (192, 0, 0)
+# 	c[2] = (0, 192, 0)
+# 	c[3] = (192, 160, 0)
+# 	c[4] = (0, 0, 192)
+# 	c[5] = (192, 0, 192)
+# 	c[6] = (0, 192, 192)
+#
+# 	for n in range(16, 232):
+# 		y = int(0.2 * ((n - 16) // 36))
+# 		z = int(0.2 * ((n - 16) % 36 // 6))
+# 		x = int(0.2 * ((n - 16) % 6))
+# 		c[n] = (x, y, z)
+# 	for n in range(232, 256):
+# 		c[n] = int(255 / 25 * (n - 25))
+
+
 _ansi = {
 	'CSI': '\x1b[',        # Control Sequence Introducer
-	'CUU': '\x1b[%dA',     # CUrsor Up (n=1)
-	'CUD': '\x1b[%dB',     # CUrsor Down (n=1)
-	'CUF': '\x1b[%dC',     # CUrsor Foward (n=1)
-	'CUB': '\x1b[%dD',     # CUrsor Back (n=1)
-	'CNL': '\x1b[%dE',     # Cursor Next Line (n=1)
-	'CPL': '\x1b[%dF',     # Cursor Previous Line (n=1)
-	'CHA': '\x1b[%dG',     # Cursor Horizontal Absolute (n=1)
-	'CUP': '\x1b[%d;%dH',  # CUrsor Position (row=1, column=1)
-	'ED': '\x1b[%dJ',      # Erase Display (n=0) (0: CUP-END, 1: BEGIN-CUP, 2: Entire screen, 3: Entire screen + scollback (xterm))
-	'EL': '\x1b[%dK',      # Erase Line (n=0) (0: CUP-EOL, 1: SOL-CUP, 2: Entire line)
-	'SU': '\x1b[%dS',      # Scroll Up (n=1)
-	'SD': '\x1b[%dT',      # Scroll Down (n=1)
-	'HVP': '\x1b[%d;%df',  # Horizontal Vertical Position (same as CUP)
+	'CUU': '\x1b[%sA',     # CUrsor Up (n=1)
+	'CUD': '\x1b[%sB',     # CUrsor Down (n=1)
+	'CUF': '\x1b[%sC',     # CUrsor Foward (n=1)
+	'CUB': '\x1b[%sD',     # CUrsor Back (n=1)
+	'CNL': '\x1b[%sE',     # Cursor Next Line (n=1)
+	'CPL': '\x1b[%sF',     # Cursor Previous Line (n=1)
+	'CHA': '\x1b[%sG',     # Cursor Horizontal Absolute (n=1)
+	'CUP': '\x1b[%s;%sH',  # CUrsor Position (row=1, column=1)
+	'ED': '\x1b[%sJ',      # Erase Display (n=0) (0: CUP-END, 1: BEGIN-CUP, 2: Entire screen, 3: Entire screen + scollback (xterm))
+	'EL': '\x1b[%sK',      # Erase Line (n=0) (0: CUP-EOL, 1: SOL-CUP, 2: Entire line)
+	'SU': '\x1b[%sS',      # Scroll Up (n=1)
+	'SD': '\x1b[%sT',      # Scroll Down (n=1)
+	'HVP': '\x1b[%s;%sf',  # Horizontal Vertical Position (same as CUP)
 	'SGR': '\x1b[%sm',     # Set Graphics Rendition. NOTE: useful for colors!
 	'AUX_ON': '\x1b[5i',   # Enable aux port for printer
 	'AUX_OFF': '\x1b[6i',  # Disable aux port for print
@@ -211,15 +283,7 @@ _sgr = {
 
 
 def _getCursor():
-	if _get is None:
-		if _platform.system() is 'Windows':
-			_get = __import__('msvcrt')
-		else:
-			try:
-				_get = __import__('getch')
-			except ImportError:
-				print('Getch is required to read the cursor position.\nMake sure that you have it installed: pip3 install -U getch.')
-				system(1)
+	_getInit()
 	_sys.stdout.buffer.write(_ansi['DSR'].encode())
 	_sys.stdout.buffer.flush()
 	appendmode = False
@@ -252,24 +316,113 @@ def CUP(row=None, col=None):
 		_sys.stdout.buffer.write((_ansi['CUP'] % (row, col)).encode())
 
 
-def _extracolor(i):  # TODO
-	if isinstance(i, str):
+def _OSC_available(n: int=0) -> bool:
+	assert isinstance(n, int) and n >= 0 and n < 256
+	if _sys.platform in ['darwin', 'linux']:
+		oprintf('\e]4;%d;?\a' % n)
+		if not _os.path.exists('/dev/tty'):
+			return False
+		with open('/dev/tty', 'rb') as f:
+			tmp = b''
+			while True:
+				x = f.read(1)
+				if x is '\a':
+					return tmp is not b''
+				tmp += x
+	else:
+		return False
+
+
+def testBuiltinColors() -> int:
+	'''testBuiltinColors()
+	returns the number of supported colors or -1 if terminal does not support the detection.
+	'''
+	if not _OSC_available():
+		return -1
+	mn, mx = 0, 256
+	while x + 1 < mx:
+		x = (mn + mx) // 2
+		r = _OSC_available(x)
+		if r:
+			mn = x
+		else:
+			mx = x
+	return x
+
+
+def _extracolor(j):  # TODO!!!!!!!!!!!!!!!
+	if isinstance(j, str):
+		if j.startswith('bg='):
+			dbg('Setting background color')
+			target = 1
+			i = j[3:]
+		elif j.startswith('fg='):
+			dbg('Setting foreground color')
+			target = 0
+			i = j[3:]
+		else:
+			dbg('Setting foreground color')
+			target = 0
+			i = j
 		if i.isdigit() and int(i) < 256 and int(i) >= 0:
-			return '38;5;%s' % i
+			return '%d;5;%s' % (38 + 10 * target, i)
+		elif i.startswith('#') and all([x.lower() in '0123456789abcdef' for x in i[1:]]) and len(i[1:]) in [3, 6]:
+			i = i[1:]
+			tup = [int((2 - (len(i) is 6)) * i[x:x + 2 - (len(i) is 3)], 16) for x in range(0, len(i), 2 - (len(i) is 3))]
+			return '{};2;{};{};{}'.format(38 + 10 * target, *tup)
 		elif all([x.lower() in '0123456789abcdef' for x in i]) and len(i) in [3, 6]:
 			tup = [int((2 - (len(i) is 6)) * i[x:x + 2 - (len(i) is 3)], 16) for x in range(0, len(i), 2 - (len(i) is 3))]
-			return '38;2;{};{};{}'.format(*t)
-	elif isinstance(i, int) and i >= 0 and i < 256:
-		return '38;5;%d' % i
-	elif isinstance(i, bytes) and len(i) is 3:
-		return '38;2;{};{};{}'.format(ord(i[0]), ord(i[1]), ord(i[2]))
+			return '{};2;{};{};{}'.format(38 + 10 * target, *tup)
+	elif isinstance(j, int) and i >= 0 and i < 256:
+		return '38;5;%d' % j
+	elif isinstance(j, bytes) and len(j) is 3:
+		return '38;2;{};{};{}'.format(ord(j[0]), ord(j[1]), ord(j[2]))
 	return ''
 
 
 def ANSI(opt: str, dest=None):
 	assert isinstance(opt, str)
 	# TODO: FULL ANSI SUPPORT inside []
-	return SGR(opt, dest)
+	dbg(repr(opt))
+	if dest is not None and useColors.get(dest, False):
+		tmp = ''
+		last = None  # 0=sgr, 1=ANSI
+		fail = []
+
+		def add(text, sgr):
+			nonlocal tmp, last
+			if sgr:
+				if last is None or last is 1:
+					tmp += '\x1b['
+					last = 0
+				else:
+					tmp += ';'
+				tmp += text
+			else:
+				if last is 0:
+					tmp += 'm'
+					last = 0
+				tmp += text
+
+		for x in opt.split(';'):
+			dbg(repr(x))
+			if x in _sgr:
+				add(str(_sgr[x]), True)
+			elif len(_extracolor(x)) > 0:
+				add(_extracolor(x), True)
+			else:
+				y = x.split(',')
+				if len(y) > 1 and y[0] in _ansi and _ansi[y[0]].count('%') < len(y):
+					add(_ansi[y[0]] % tuple(y[1:]), False)
+				elif len(y) is 1 and y[0] in _ansi:
+					add(_ansi[y[0]], False)
+				else:
+					fail.append(x)
+		if last is 0:
+			tmp += 'm'
+		return tmp + ('[FAILED: %s]' % ';'.join(fail)) * (len(fail) > 0)
+	else:
+		return ''
 
 
 def SGR(opt: str, dest=None):
@@ -287,23 +440,6 @@ def SGR(opt: str, dest=None):
 		return _ansi['SGR'] % ';'.join(tmp) + ('<FAILED: %s>' % ';'.join(fail)) * (len(fail) > 0)
 	else:
 		return ''
-
-
-_eeregex = '(?P<todo>' \
-	+ '((^|[^\\\\])(\$|!)((\w+[\w\d=-]*)|(?<rec>\((?:[^()]++|(?&rec))*\))))' \
-	+ '|(^|[^\\\\])({[^}]+})' \
-	+ '|(^|[^\\\\])(\[[-;\w\d\s]+\])' \
-	+ ')'
-_fmtspec = '((?P<fill>.?)(?P<align>[0<>\\^]))?' \
-	+ '(?P<sign>[ +-])?' \
-	+ '(?P<altform>[#])?' \
-	+ '(?P<width>[\d]+)?' \
-	+ ',?(\\.(?P<precision>[\d]+))?' \
-	+ '(?P<type>[bcdeEfFgGnosxX])?'
-_fmtregex = '(?P<fieldname>[\d\w]+)' \
-	+ '(\\.(?P<attrname>\w*)|(\[(?P<elindex>[^\\]]*)\]))?' \
-	+ '(!(?P<conv>[rsa]))?' \
-	+ '(:' + _fmtspec + ')?'
 
 
 def format(fmt: str, *args, **kwargs) -> str:
@@ -341,7 +477,7 @@ def _format(fmt: str, dest: str, frame, *args, **kwargs):  # TODO:
 	ret = fmt
 	errs = []
 	matches = [x[0] for x in _regex.findall(_eeregex, ret, flags=_regex.VERBOSE + _regex.MULTILINE)]
-	# print('TODO matches:\n%s' % matches)  # DEBUG
+	dbg('TODO matches:\n%s' % matches)  # DEBUG
 	for m in matches:
 		if m.startswith('\\'):
 			print('ERROR: %r' % m)
@@ -352,7 +488,7 @@ def _format(fmt: str, dest: str, frame, *args, **kwargs):  # TODO:
 				m2 = m[1:]
 			else:
 				m2 = m
-		# print(repr(m), repr(m2))  # DEBUG
+		dbg(repr(m), repr(m2))  # DEBUG
 		if m2.startswith('!'):
 			# print('exec(%r)' % m2)  # DEBUG
 			if m2.startswith('!(') and m2.endswith(')'):
@@ -363,6 +499,7 @@ def _format(fmt: str, dest: str, frame, *args, **kwargs):  # TODO:
 				try:
 					exec(m3, dg, dl)
 				except Exception as e:
+					dbg(e)
 					errs.append([e, {'m': m, 'm2': m2, 'm3': m3, 'ret': ret}])
 				r = ''
 			else:
@@ -377,6 +514,7 @@ def _format(fmt: str, dest: str, frame, *args, **kwargs):  # TODO:
 				r = str(eval(m3, dg, dl))
 			except Exception as e:
 				errs.append([e, {'m': m, 'm2': m2, 'm3': m3, 'ret': ret}])
+				dbg(e)
 				r = ('[FAILED: %r]' % m3) * warnOnFail
 		elif m2.startswith('{') and m2.endswith('}'):  # BUG: Will not work on {0!r: <7} etc.
 			# print('eval(%r)' % m2[1:-1]) # DEBUG
@@ -386,12 +524,14 @@ def _format(fmt: str, dest: str, frame, *args, **kwargs):  # TODO:
 					r = ('{%s}' % m3).format(*args, **d)
 				except Exception as e:
 					r = ('[FAILED: %r]' % m3) * warnOnFail
+					dbg(e)
 					errs.append([e, {'m': m, 'm2': m2, 'm3': m3, 'ret': ret}])
 			else:
 				try:
 					r = str(eval(m3, dg, dl))
 				except Exception as e:
 					r = ('[FAILED: %r]' % m3) * warnOnFail
+					dbg(e)
 					errs.append([e, {'m': m, 'm2': m2, 'm3': m3, 'ret': ret}])
 		elif m2.startswith('[') and m2.endswith(']'):
 			m3 = m2[1:-1]
@@ -399,6 +539,7 @@ def _format(fmt: str, dest: str, frame, *args, **kwargs):  # TODO:
 				r = ANSI(m3, dest)
 			except Exception as e:
 				r = ('[FAILED: %r]' % m3) * warnOnFail
+				dbg(e)
 				errs.append([e, {'m': m, 'm2': m2, 'm3': m3, 'ret': ret}])
 		else:
 			r = ''
@@ -453,6 +594,12 @@ def eprintf(fmt: str, *args, **kwargs):
 	'''
 	frame = kwargs.pop('_frame_', currentframe().f_back)
 	_printf(fmt, 'stderr', frame, *args, **kwargs)
+
+
+def dbg(*args):
+	if debug:
+		print('DEBUG: ', end='')
+		print(*args)
 
 
 def hook(sysobj):

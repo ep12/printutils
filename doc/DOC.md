@@ -71,8 +71,8 @@ The printutils.oprintf, printutils.eprintf and printutils.format functions all h
 	printf('a is currently $("not "*(a is not 5))five.\n')
 	```
 + `exec` inside fmtstr:
-	'!(x=5) or !x=', same as for '$'
-	**NOTE:** printutils.allowExec must be set to True for this to work!
+	'!(x=5) or !x=', same as for '$'  
+	**NOTE:** printutils.allowExec must be set to True for this to work!  
 	**DANGER:** ONLY USE THIS IF YOU ***EXACTLY*** KNOW WHAT YOU ARE DOING! ***NEVER*** let users execute code like this!
 	```Python
 	# <HEADER>
@@ -95,10 +95,10 @@ The printutils.oprintf, printutils.eprintf and printutils.format functions all h
 	printfe('[bluefg;whitebg] INFO: [reset] Colors are $("not "*(1-useColors["all"]))supported.')
 	```
 	If colors aren't supported, the format specified will just be left out, printing an uncolored string:
-	Windows:
-	![Windows](img/testcolors-win.png)
-	Linux / Windows Subsystem for Linux:
-	![Windows](img/testcolors-wsl.png)
+	Windows:  
+	![Windows](img/testcolors-win.png)  
+	Linux / Windows Subsystem for Linux:  
+	![Windows](img/testcolors-wsl.png)  
 
 # Options
 The following options are available:
