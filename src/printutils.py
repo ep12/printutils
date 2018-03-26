@@ -328,8 +328,10 @@ def _OSC_available(n: int=0) -> bool:
 		s = _time.time()
 		appendmode = True
 		tmp = ''
-		_sys.stdout.buffer.write(('\x1b[8m\x1b]4;%d;?\a\x1b[28m' % n).encode())
-		_sys.stdout.buffer.flush()
+		_sys.stdout.buffer.write(('\x1b]4;%d;?\a' % n).encode())
+		# _sys.stdout.buffer.flush()
+		# _os.system('cat < /dev/tty')
+		print(_os.path.getsize('/dev/tty'))
 		while True:  # time.time() < s + 0.01:
 			x = _get.getch()
 			if x is '\x1b':
