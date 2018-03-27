@@ -1,6 +1,11 @@
 import sys as _sys
 import os as _os
 import signal as _s
+import platform as _platform
+import time as _time
+from ansi import *
+
+debug = False
 
 
 def pipimport(name: str):
@@ -123,15 +128,15 @@ def initColors():
 		if (hasattr(fd, 'isatty') and fd.isatty()) or ('TERM' in _os.environ and _os.environ['TERM'] is 'ANSI'):
 			if _platform.system() is 'Windows':
 				if 'CONEMUANSI' in _os.environ and _os.environ['CONEMUANSI'] == 'ON':
-					useColors[_u.fdconv(fd)] = True
+					useColors[fdconv(fd)] = True
 				elif 'TERM' in _os.environ and _os.environ['TERM'] == 'ANSI':
-					useColors[_u.fdconv(fd)] = True
+					useColors[fdconv(fd)] = True
 				else:
-					useColors[_u.fdconv(fd)] = False
+					useColors[fdconv(fd)] = False
 			else:
-				useColors[_u.fdconv(fd)] = True
+				useColors[fdconv(fd)] = True
 		else:
-			useColors[_u.fdconv(fd)] = False
+			useColors[fdconv(fd)] = False
 
 	useColors['all'] = useColors['stdout'] and useColors['stderr']
 	useColors['any'] = useColors['stdout'] or useColors['stderr']
@@ -202,7 +207,6 @@ def OSC_color_available(n: int=0) -> (bool, str, tuple):
 		while True:
 			x = getch(0.1, True)  # BUG: Doesn't work on windows
 			# x = ut.getch(-1, True)
-			print(repr(x))
 			if len(x) is 0:
 				break
 			if x is '\x1b':
@@ -227,13 +231,15 @@ def getColorRGB(n: int=0) -> tuple:
 	success, dummy, rgb = OSC_color_available(n)
 	if success:
 		return rgb
+	else:
+		return None
 
 
 def testBuiltinColors() -> int:
 	'''testBuiltinColors()
 	returns the number of supported colors or -1 if terminal does not support the detection.
 	'''
-	if not _OSC_available()[0]:
+	if not OSC_color_available()[0]:
 		return -1
 	mn, mx = 0, 256
 	x = 0
