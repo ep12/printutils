@@ -154,7 +154,7 @@ def _getCursor():
 			# 	oprintf(_ansi['EL'] % 0)
 			# 	break
 			# else:
-			x = _u.getch(0.01)
+			x = getch(0.01)
 		except KeyboardInterrupt:
 			tmp = x = ''
 		if x is '\x1b':
@@ -200,7 +200,7 @@ def OSC_color_available(n: int=0) -> (bool, str, tuple):
 		_sys.stdout.buffer.write(('\x1b]4;%d;?\a' % n).encode())
 		_sys.stdout.buffer.flush()
 		while True:
-			x = ut.getch(0.1, True)  # BUG: Doesn't work on windows
+			x = getch(0.1, True)  # BUG: Doesn't work on windows
 			# x = ut.getch(-1, True)
 			print(repr(x))
 			if len(x) is 0:
@@ -224,7 +224,7 @@ def OSC_color_available(n: int=0) -> (bool, str, tuple):
 
 
 def getColorRGB(n: int=0) -> tuple:
-	success, dummy, rgb = _OSC_color_available(n)
+	success, dummy, rgb = OSC_color_available(n)
 	if success:
 		return rgb
 
@@ -239,12 +239,12 @@ def testBuiltinColors() -> int:
 	x = 0
 	while x + 1 < mx:
 		n = _time.time()
-		oprintf('\r' + ((int(4 * n) % 2) * ' ' + '.').ljust(3) + 3 * '\b')
+		print('\r' + ((int(4 * n) % 2) * ' ' + '.').ljust(3) + 3 * '\b', end='')
 		x = (mn + mx) // 2
-		r = _OSC_available(x)[0]
+		r = OSC_color_available(x)[0]
 		if r:
 			mn = x
 		else:
 			mx = x
-	oprintf('   \r')
+	print('   \r', end='')
 	return x
