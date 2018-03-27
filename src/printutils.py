@@ -31,12 +31,14 @@ __keywords__ = 'utils development print output'
 
 from inspect import currentframe, getmro, isclass, isfunction
 import regex as _regex
+import re as _re
 import os as _os
 import sys as _sys
 import platform as _platform
 import time as _time
-
-_get = None
+import utils as _u
+# import colorama as _colorama
+# _get = None
 
 
 def _fdconv(fd, target=None):
@@ -96,17 +98,17 @@ _fmtregex = '(?P<fieldname>[\d\w]+)' \
 	+ '(:' + _fmtspec + ')?'
 
 
-def _getInit():
-	global _get
-	if _get is None:
-		if _platform.system() is 'Windows':
-			_get = __import__('msvcrt')
-		else:
-			try:
-				_get = __import__('getch')
-			except ImportError:
-				print('Getch is required to read the cursor position.\nMake sure that you have it installed: pip3 install -U getch.')
-				system(1)
+# def _getInit():
+# 	global _get
+# 	if _get is None:
+# 		if _platform.system() is 'Windows':
+# 			_get = __import__('msvcrt')
+# 		else:
+# 			try:
+# 				_get = __import__('getch')
+# 			except ImportError:
+# 				print('Getch is required to read the cursor position.\nMake sure that you have it installed: pip3 install -U getch.')
+# 				system(1)
 
 
 def initColors():
@@ -284,19 +286,29 @@ _sgr = {
 
 
 def _getCursor():
-	_get
-	_getInit()
+	if _sys.platform == 'win32':
+		raise NotImplementedError('Feature not available')
+	appendmode = False
+	tmp = ''
 	_sys.stdout.buffer.write(_ansi['DSR'].encode())
 	_sys.stdout.buffer.flush()
-	appendmode = False
 	while True:
-		x = _get.getch()
+		try:
+			# if _sys.platform is 'win32':
+			# 	oprintf('[bluefg;whitebg] INFO [reset] Trying to detect cursor postion. Press enter:\r')
+			# 	tmp = _sys.stdin.readline()  # Windows
+			# 	oprintf(_ansi['EL'] % 0)
+			# 	break
+			# else:
+			x = _u.getch(0.01)
+		except KeyboardInterrupt:
+			tmp = x = ''
 		if x is '\x1b':
 			tmp = x
 			appendmode = True
 		elif appendmode:
 			tmp += x
-		if x is 'R':
+		if x in ['R', '\n', '']:
 			break
 	return tmp
 
@@ -307,7 +319,14 @@ def CUP(row=None, col=None):
 		Otherwise any value that is None is set to 1 and the function sets the cursor position.
 	'''
 	if row is None and col is None:
-		return tuple([int(x) for x in _getCursor()[2:-1].split(';')])
+		try:
+			r = _getCursor()
+		except NotImplementedError:
+			r = ''
+		if r:
+			return tuple([int(x) for x in r[2:-1].split(';')])
+		else:
+			return (False, False)
 	else:
 		if row is None:
 			row = 1
@@ -318,50 +337,41 @@ def CUP(row=None, col=None):
 		_sys.stdout.buffer.write((_ansi['CUP'] % (row, col)).encode())
 
 
-def _OSC_available(n: int=0) -> bool:
+def _OSC_color_available(n: int=0) -> (bool, str, tuple):
 	assert isinstance(n, int) and n >= 0 and n < 256
-	global _get
+	print('_OSC_available(%d)' % n)
 	if _sys.platform in ['darwin', 'linux']:
-		if not _os.path.exists('/dev/tty'):
-			return (False, None)
-		_getInit()
 		s = _time.time()
-		appendmode = True
+		appendmode = False
 		tmp = ''
 		_sys.stdout.buffer.write(('\x1b]4;%d;?\a' % n).encode())
-		# _sys.stdout.buffer.flush()
-		# _os.system('cat < /dev/tty')
-		print(_os.path.getsize('/dev/tty'))
-		while True:  # time.time() < s + 0.01:
-			x = _get.getch()
+		_sys.stdout.buffer.flush()
+		while True:
+			x = _u.getch(0.1, True)  # BUG: Doesn't work on windows
+			# x = _u.getch(-1, True)
+			print(x)
 			if x is '\x1b':
 				tmp = x
 				appendmode = True
 			elif appendmode:
 				tmp += x
-			if x in ['\a', '\n']:
+			if x in ['\a', '\n', '']:
 				break
-		if tmp is not '':
+		if tmp not in ['\n', '']:
 			print(repr(tmp))
-			return (True, tmp)
-		# with open('/dev/tty', 'rb') as f:
-		# 	# _os.lockf(f, _os.F_LOCK)
-		# 	tmp = b''
-		#
-		# 	while _time.time() < s + 0.01:
-		# 		if _os.path.getsize('/dev/tty'):
-		# 			x = f.read(1)
-		# 			if x is '\a':
-		# 				f.close()
-		# 				open('/dev/tty', 'w').close()
-		# 				break
-		# 			tmp += x
-		# 	# _os.lockf(f, _os.F_ULOCK, 16)
-		# if tmp is not b'':
-		# 	print()
-		# 	print(repr(tmp))
-		# 	return (True, tmp)
-	return (False, None)
+			try:
+				m = _re.match('\x1b]4;[\\d]+;rgb:(\d{2})(\d{2})/(\d{2})(\d{2})/(\d{2})(\d{2})\x07', tmp).groups()
+				rgb = (int(m[0]) << 4 + int(m[1]), int(m[2]) << 4 + int(m[3]), int(m[4]) << 4 + int(m[5]))
+			except Exception:
+				rgb = (0x00, 0x00, 0x00)
+			return (True, tmp, rgb)
+	return (False, None, (0x00, 0x00, 0x00))
+
+
+def getColorRGB(n: int=0) -> tuple:
+	success, dummy, rgb = _OSC_color_available(n)
+	if success:
+		return rgb
 
 
 def testBuiltinColors() -> int:
