@@ -3,7 +3,8 @@ import os as _os
 import signal as _s
 import platform as _platform
 import time as _time
-from ansi import *
+import re as _re
+import ansi
 
 debug = False
 
@@ -149,14 +150,14 @@ def _getCursor():
 		raise NotImplementedError('Feature not available')
 	appendmode = False
 	tmp = ''
-	_sys.stdout.buffer.write(_ansi['DSR'].encode())
+	_sys.stdout.buffer.write(ansi.ansi['DSR'].encode())
 	_sys.stdout.buffer.flush()
 	while True:
 		try:
 			# if _sys.platform is 'win32':
 			# 	oprintf('[bluefg;whitebg] INFO [reset] Trying to detect cursor postion. Press enter:\r')
 			# 	tmp = _sys.stdin.readline()  # Windows
-			# 	oprintf(_ansi['EL'] % 0)
+			# 	oprintf(ansi.ansi['EL'] % 0)
 			# 	break
 			# else:
 			x = getch(0.01)
@@ -193,7 +194,7 @@ def cursorPosition(row=None, col=None):
 			col = 1
 		assert isinstance(row, int) and row > 0, 'row must be a positive integer'
 		assert isinstance(col, int) and col > 0, 'col must be a positive integer'
-		_sys.stdout.buffer.write((_ansi['CUP'] % (row, col)).encode())
+		_sys.stdout.buffer.write((ansi.ansi['CUP'] % (row, col)).encode())
 
 
 def OSC_color_available(n: int=0) -> (bool, str, tuple):
@@ -216,13 +217,18 @@ def OSC_color_available(n: int=0) -> (bool, str, tuple):
 				tmp += x
 			if x in ['\a', '\n', '']:
 				break
+		tmp = '\x1b]4;1;rgb:dcdc/3232/2f2f\x07'
 		if tmp not in ['\n', '']:
 			print(repr(tmp))
-			try:
-				m = _re.match('\x1b]4;[\\d]+;rgb:(\d{2})(\d{2})/(\d{2})(\d{2})/(\d{2})(\d{2})\x07', tmp).groups()
-				rgb = (int(m[0]) << 4 + int(m[1]), int(m[2]) << 4 + int(m[3]), int(m[4]) << 4 + int(m[5]))
-			except Exception:
-				rgb = (0x00, 0x00, 0x00)
+			# try:
+			m = _re.match('\x1b]4;[\\d]+;rgb:{0}\/{0}\/[0]\x07'.format(2 * '([\\da-fA-F]{2})'), tmp)
+			print(m)
+			m = m.groups()
+			num = [[int(m[i], 16), int(m[i], 16)][i % 2 is 0] for i in range(len(m))]
+			print(num)
+			rgb = (int(m[0], 2) << 4 + int(m[1]), int(m[2]) << 4 + int(m[3]), int(m[4]) << 4 + int(m[5]))
+			# except Exception:
+			# 	rgb = (0x00, 0x00, 0x00)
 			return (True, tmp, rgb)
 	return (False, None, (0x00, 0x00, 0x00))
 
@@ -254,3 +260,10 @@ def testBuiltinColors() -> int:
 			mx = x
 	print('   \r', end='')
 	return x
+
+
+def setTitle(title: str):
+	'''Sets the window title
+	'''
+	assert all([x.lower() in anso.OSC_VALID for x in title])
+	# NOTE: most terminals might just use '[^\a]*\a'...

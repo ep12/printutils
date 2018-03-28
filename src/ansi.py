@@ -1,4 +1,6 @@
-_ansi = {
+OSC_VALID = '0123456789abcdefghijklmnopqrstuvwxyz;-,#"'
+
+ansi = {
 	'CSI': '\x1b[',        # Control Sequence Introducer
 	'CUU': '\x1b[%sA',     # CUrsor Up (n=1)
 	'CUD': '\x1b[%sB',     # CUrsor Down (n=1)
@@ -26,7 +28,7 @@ _ansi = {
 	'EBP': '\x1b[?2004h',  # Enable Bracketed Paste mode
 	'DBP': '\x1b[?2004l',  # Disable Bracketed Paste mode
 }
-_sgr = {
+sgr = {
 	'normal': 0, 'reset': 0,
 	'bold': 1,
 	'faint': 2,
